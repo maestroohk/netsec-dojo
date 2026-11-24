@@ -1,0 +1,30 @@
+x-node: &node
+  image: dojo-toolbox:latest
+  init: true
+  cap_add: [NET_ADMIN]
+  volumes: ["./files:/lab:ro"]
+
+services:
+  workstation:
+    <<: *node
+    hostname: workstation
+    environment: { DOJO_PORT: "${DOJO_PORT}", DOJO_AGENT: "${DOJO_AGENT}" }
+    networks: { lan: { ipv4_address: 10.13.1.10 } }
+  router:
+    <<: *node
+    hostname: router
+    sysctls: { net.ipv4.ip_forward: 1 }
+    networks:
+      lan: { ipv4_address: 10.13.1.254 }
+      dmz: { ipv4_address: 10.13.2.254 }
+  intranet:
+    <<: *node
+    hostname: intranet
+    environment: { DOJO_PORT: "${DOJO_PORT}", DOJO_FLAG: "${DOJO_FLAG}" }
+    networks: { dmz: { ipv4_address: 10.13.2.10 } }
+
+networks:
+  lan:
+    ipam: { config: [ { subnet: 10.13.1.0/24, gateway: 10.13.1.1 } ] }
+  dmz:
+    ipam: { config: [ { subnet: 10.13.2.0/24, gateway: 10.13.2.1 } ] }

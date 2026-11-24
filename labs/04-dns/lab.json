@@ -1,0 +1,68 @@
+{
+  "title": "DNS: names to addresses",
+  "module": "1 · Networking foundations",
+  "minutes": 30,
+  "summary": "Query a DNS server by hand with dig, read different record types, then point a PC at it.",
+  "nodes": {
+    "pc": "an office PC, 10.14.1.10",
+    "ns": "the office DNS server for dojo.lab, 10.14.1.53"
+  },
+  "default_node": "pc",
+  "ready": [ { "node": "ns", "cmd": "dig +short +time=1 @10.14.1.53 ns.dojo.lab | grep -q 10.14.1.53" } ],
+  "vars": { "FLAG": { "type": "flag" } },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Ask a server directly",
+      "text": "From **pc**, ask the DNS server `10.14.1.53` for the address (A record) of `intranet.dojo.lab`. What IP comes back?",
+      "answer": "10.14.1.50",
+      "hints": [
+        "`dig @SERVER NAME` sends one query to one server and prints the full answer.",
+        "`dig @10.14.1.53 intranet.dojo.lab`, or add `+short` for just the answer."
+      ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "dig +short @10.14.1.53 intranet.dojo.lab A" } }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "Aliases",
+      "text": "`www.dojo.lab` is not a real host, it is a **CNAME** (an alias). Which name does it point to?",
+      "answer": ["web01.dojo.lab", "web01.dojo.lab."],
+      "hints": [ "`dig @10.14.1.53 www.dojo.lab` and look in the ANSWER SECTION for the CNAME line." ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "dig +short @10.14.1.53 www.dojo.lab CNAME" } }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "Where does mail go?",
+      "text": "Mail for a domain is delivered to the host in its **MX** record. Which host receives mail for `dojo.lab`?",
+      "answer": ["mail.dojo.lab", "mail.dojo.lab."],
+      "hints": [ "Put the record type after the name: `dig @10.14.1.53 dojo.lab MX`." ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "dig +short @10.14.1.53 dojo.lab MX | awk '{print $2}'" } }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "Records that hold text",
+      "text": "**TXT** records hold free text (used for email security, domain verification, and sometimes leaked secrets). Read the TXT record of `_flag.dojo.lab`.",
+      "answer": "{{FLAG}}",
+      "hints": [ "`dig @10.14.1.53 _flag.dojo.lab TXT +short`. Drop the quotes." ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "dig +short @10.14.1.53 _flag.dojo.lab TXT | tr -d '\"'" } }
+    },
+    {
+      "id": "t5",
+      "type": "state",
+      "title": "Use it as the resolver",
+      "text": "Typing `@10.14.1.53` every time is not how PCs work. Configure **pc** so ordinary programs resolve `dojo.lab` names through `10.14.1.53`: `getent hosts vault.dojo.lab` must return `10.14.1.99`.",
+      "checks": [
+        { "node": "pc", "cmd": "getent hosts vault.dojo.lab | grep -q '^10\\.14\\.1\\.99'", "fail_msg": "getent hosts vault.dojo.lab does not return 10.14.1.99 yet." }
+      ],
+      "hints": [
+        "Linux reads its DNS servers from `/etc/resolv.conf`. Look at it first: `cat /etc/resolv.conf`.",
+        "Replace the `nameserver` line with `nameserver 10.14.1.53`. For example: `echo 'nameserver 10.14.1.53' > /etc/resolv.conf`."
+      ],
+      "solution": { "steps": [ { "node": "pc", "cmd": "echo 'nameserver 10.14.1.53' > /etc/resolv.conf" } ] }
+    }
+  ]
+}

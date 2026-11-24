@@ -1,0 +1,14 @@
+#!/bin/sh
+# Runs once when a lab node boots.
+# 1. Removes Docker's default route so the lab network is the only network
+#    (set NODE_KEEP_DEFAULT_ROUTE=1 to keep it).
+# 2. Runs /lab/init/<hostname>.sh if the lab provides one.
+if [ "${NODE_KEEP_DEFAULT_ROUTE:-0}" != "1" ]; then
+  ip route del default 2>/dev/null || true
+fi
+script="/lab/init/$(hostname).sh"
+if [ -f "$script" ]; then
+  tr -d '\r' < "$script" > /tmp/node-init.sh
+  sh /tmp/node-init.sh > /var/log/node-init.log 2>&1 || echo "node init failed, see /var/log/node-init.log" >&2
+fi
+exec "$@"

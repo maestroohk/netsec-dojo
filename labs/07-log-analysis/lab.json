@@ -1,0 +1,82 @@
+{
+  "title": "Log analysis: spotting an incident",
+  "module": "3 · Defence and detection",
+  "minutes": 45,
+  "summary": "Read a day of web and SSH logs with grep, awk and sort. Find the scanner, find the break-in, and block it.",
+  "nodes": { "webserver": "a web server whose logs you are investigating" },
+  "default_node": "webserver",
+  "ready": [ { "node": "webserver", "cmd": "test -s /var/log/auth.log" } ],
+  "vars": {
+    "SEED": { "type": "int", "min": 1, "max": 1000000 },
+    "SCANNER": { "type": "ip" },
+    "GUESSER": { "type": "ip" },
+    "USER": { "type": "choice", "options": ["backup", "jenkins", "support", "devops", "webadmin"] }
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "How busy was the day?",
+      "text": "How many requests are recorded in `/var/log/nginx/access.log`?",
+      "answer_cmd": { "node": "webserver", "cmd": "wc -l < /var/log/nginx/access.log" },
+      "hints": [ "Each request is one line. `wc -l` counts lines." ],
+      "solution": { "answer_cmd": { "node": "webserver", "cmd": "wc -l < /var/log/nginx/access.log" } }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "Who got the most 404s?",
+      "text": "A burst of `404 Not Found` responses from one address usually means someone is guessing paths. Which IP address received the most 404s?",
+      "answer": "{{SCANNER}}",
+      "hints": [
+        "Field 9 of each line is the status code and field 1 the client IP. `awk '$9 == 404 {print $1}'` prints the IP of every 404.",
+        "Count per IP with `sort | uniq -c | sort -rn | head`."
+      ],
+      "solution": { "answer_cmd": { "node": "webserver", "cmd": "awk '$9 == 404 {print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -1 | awk '{print $2}'" } }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "Did the probing find anything?",
+      "text": "Of the paths that address requested, one returned **200 OK**. Which path?",
+      "answer": "/login",
+      "hints": [ "Filter for that IP and status 200: `grep <ip> access.log | awk '$9 == 200 {print $7}'`." ],
+      "solution": { "answer_cmd": { "node": "webserver", "cmd": "awk -v ip={{SCANNER}} '$1 == ip && $9 == 200 {print $7}' /var/log/nginx/access.log | sort -u | head -1" } }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "The password guesser",
+      "text": "Now `/var/log/auth.log`. One address failed SSH logins dozens of times. Which address?",
+      "answer": "{{GUESSER}}",
+      "hints": [
+        "`grep 'Failed password' /var/log/auth.log` shows failures. The IP follows the word `from`.",
+        "`grep 'Failed password' /var/log/auth.log | grep -o 'from [0-9.]*' | sort | uniq -c | sort -rn`."
+      ],
+      "solution": { "answer_cmd": { "node": "webserver", "cmd": "grep 'Failed password' /var/log/auth.log | grep -o 'from [0-9.]*' | sort | uniq -c | sort -rn | head -1 | awk '{print $3}'" } }
+    },
+    {
+      "id": "t5",
+      "type": "answer",
+      "title": "Did it work?",
+      "text": "After all those failures, that address **logged in successfully**. As which user account? (This is the moment an incident starts.)",
+      "answer": "{{USER}}",
+      "hints": [ "Look for `Accepted` lines from that address: `grep Accepted /var/log/auth.log | grep <ip>`." ],
+      "solution": { "answer_cmd": { "node": "webserver", "cmd": "grep 'Accepted' /var/log/auth.log | grep {{GUESSER}} | awk '{for(i=1;i<=NF;i++) if($i==\"for\") print $(i+1)}' | head -1" } }
+    },
+    {
+      "id": "t6",
+      "type": "state",
+      "title": "Contain it",
+      "text": "First containment step: on **webserver**, add a firewall rule that drops all incoming traffic from the address that broke in.",
+      "checks": [
+        { "node": "webserver", "cmd": "iptables -C INPUT -s {{GUESSER}} -j DROP 2>/dev/null || iptables -C INPUT -s {{GUESSER}}/32 -j DROP", "fail_msg": "No INPUT rule dropping that address yet." }
+      ],
+      "hints": [ "Lab 6 used the FORWARD chain. Traffic to this machine itself goes through `INPUT`: `iptables -A INPUT -s <ip> -j DROP`." ],
+      "solution": {
+        "note": "Blocking the address is only the first step. In a real incident you would also disable or reset the account, kill its sessions, check what it did (`last`, shell history, new files), and find out why a guessable password was allowed over SSH at all.",
+        "steps": [ { "node": "webserver", "cmd": "iptables -A INPUT -s {{GUESSER}} -j DROP" } ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "title": "Firewalls with iptables",
+  "module": "2 · Security fundamentals",
+  "minutes": 45,
+  "summary": "Turn an open router into a default-deny firewall that lets through only what the policy allows.",
+  "nodes": {
+    "router": "you configure the firewall here",
+    "admin": "the IT admin's PC, 10.16.1.10",
+    "guest": "a visitor's laptop on the same LAN, 10.16.1.66",
+    "server": "DMZ server, 10.16.2.10: web (80), SSH (22), database (5432)"
+  },
+  "default_node": "router",
+  "ready": [ { "node": "server", "cmd": "curl -s -m2 -o /dev/null http://127.0.0.1/" } ],
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Read the current policy",
+      "text": "On the **router**, list the rules of the `FORWARD` chain (the chain for traffic passing *through* the router). What is its default policy?",
+      "answer": "ACCEPT",
+      "hints": [ "`iptables -L FORWARD -n -v` or `iptables -S FORWARD`. The policy is printed next to the chain name." ],
+      "solution": { "note": "`iptables -S FORWARD` prints `-P FORWARD ACCEPT`: anything is forwarded, so the router protects nothing.", "answer": "ACCEPT" }
+    },
+    {
+      "id": "t2",
+      "type": "state",
+      "title": "Default deny, web allowed",
+      "text": "Make the router drop forwarded traffic by default, but let replies to allowed connections back and let anyone on the LAN reach the **web server** (`10.16.2.10` TCP 80). The database (5432) must become unreachable.",
+      "checks": [
+        { "node": "router", "cmd": "iptables -S FORWARD | grep -q -- '-P FORWARD DROP'", "fail_msg": "The FORWARD policy is not DROP yet." },
+        { "node": "admin", "cmd": "curl -s -m3 -o /dev/null http://10.16.2.10/", "fail_msg": "admin can no longer load the web site." },
+        { "node": "guest", "cmd": "curl -s -m3 -o /dev/null http://10.16.2.10/", "fail_msg": "guest can no longer load the web site." },
+        { "node": "admin", "cmd": "timeout 3 bash -c 'exec 3<>/dev/tcp/10.16.2.10/5432'", "expect": "fail", "fail_msg": "The database port 5432 is still reachable from the LAN." }
+      ],
+      "hints": [
+        "Order: allow return traffic first, then the specific allow rule, then set the policy. `-A` appends a rule, `-P` sets the policy.",
+        "Return traffic: `iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT`.",
+        "Web: `iptables -A FORWARD -s 10.16.1.0/24 -d 10.16.2.10 -p tcp --dport 80 -j ACCEPT`, then `iptables -P FORWARD DROP`."
+      ],
+      "solution": { "steps": [ { "node": "router", "cmd": "iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT && iptables -A FORWARD -s 10.16.1.0/24 -d 10.16.2.10 -p tcp --dport 80 -j ACCEPT && iptables -P FORWARD DROP" } ] }
+    },
+    {
+      "id": "t3",
+      "type": "state",
+      "title": "SSH for the admin only",
+      "text": "The server's SSH port (22) must be reachable from **admin** (`10.16.1.10`) and from no one else. The guest must still get the web site.",
+      "checks": [
+        { "node": "admin", "cmd": "timeout 3 bash -c 'exec 3<>/dev/tcp/10.16.2.10/22'", "fail_msg": "admin cannot reach SSH on 10.16.2.10." },
+        { "node": "guest", "cmd": "timeout 3 bash -c 'exec 3<>/dev/tcp/10.16.2.10/22'", "expect": "fail", "fail_msg": "guest can still reach SSH." },
+        { "node": "guest", "cmd": "curl -s -m3 -o /dev/null http://10.16.2.10/", "fail_msg": "guest lost access to the web site." }
+      ],
+      "hints": [
+        "Match on the source address with `-s`. A single address needs no prefix.",
+        "`iptables -A FORWARD -s 10.16.1.10 -d 10.16.2.10 -p tcp --dport 22 -j ACCEPT`."
+      ],
+      "solution": { "steps": [ { "node": "router", "cmd": "iptables -A FORWARD -s 10.16.1.10 -d 10.16.2.10 -p tcp --dport 22 -j ACCEPT" } ] }
+    },
+    {
+      "id": "t4",
+      "type": "state",
+      "title": "The DMZ cannot reach in",
+      "text": "If the DMZ server is ever compromised, it must not be able to open connections into the LAN. Make sure **server** cannot connect to the admin's file share at `10.16.1.10` port 9000, while the admin can still browse the web site.",
+      "checks": [
+        { "node": "server", "cmd": "timeout 3 bash -c 'exec 3<>/dev/tcp/10.16.1.10/9000'", "expect": "fail", "fail_msg": "server can still open a connection to 10.16.1.10:9000." },
+        { "node": "admin", "cmd": "curl -s -m3 -o /dev/null http://10.16.2.10/", "fail_msg": "admin lost access to the web site." }
+      ],
+      "hints": [
+        "If you built t2 correctly, this may already hold. Test it from the server.",
+        "Return traffic is allowed by the ESTABLISHED,RELATED rule, but a *new* connection from the DMZ matches no allow rule, so the DROP policy catches it."
+      ],
+      "solution": { "note": "With a default-deny policy and only LAN-to-DMZ allow rules, a new connection from the DMZ is dropped. Nothing extra is needed. This is why default deny is the safe starting point." }
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "title": "Port scanning with nmap",
+  "module": "2 · Security fundamentals",
+  "minutes": 40,
+  "summary": "Discover hosts on a network you are allowed to test, find their open ports, and identify what is running.",
+  "nodes": {
+    "scanner": "your machine, 10.15.1.10",
+    "target": "a server somewhere in 10.15.1.0/24 (you have to find it)",
+    "printer": "another device on the network"
+  },
+  "default_node": "scanner",
+  "ready": [ { "node": "target", "cmd": "bash -c 'exec 3<>/dev/tcp/127.0.0.1/{{PORT}}'" } ],
+  "vars": {
+    "FLAG": { "type": "flag" },
+    "HOST": { "type": "int", "min": 20, "max": 120 },
+    "DECOY": { "type": "int", "min": 130, "max": 240 },
+    "PORT": { "type": "int", "min": 20000, "max": 40000 }
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Who is out there?",
+      "text": "From **scanner**, find the live hosts on `10.15.1.0/24`. One of them runs a **web server on port 80**. What is its IP address?",
+      "answer": "10.15.1.{{HOST}}",
+      "hints": [
+        "`nmap -sn 10.15.1.0/24` finds live hosts without scanning ports.",
+        "Then check port 80 across the whole range: `nmap -p 80 --open 10.15.1.0/24`."
+      ],
+      "solution": { "answer_cmd": { "node": "scanner", "cmd": "nmap -n -p 80 --open -oG - 10.15.1.0/24 | awk '/80\\/open/{print $2}'" } }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "All the doors",
+      "text": "By default nmap only checks the 1,000 most common ports. Scan **every** TCP port on the web server. How many are open?",
+      "answer": "4",
+      "hints": [
+        "`-p-` means all 65,535 ports.",
+        "`nmap -p- -T4 <ip>` and count the `open` lines."
+      ],
+      "solution": { "answer_cmd": { "node": "scanner", "cmd": "nmap -n -p- -T4 10.15.1.{{HOST}} | grep -c '/tcp *open'" } }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "The odd one out",
+      "text": "Three of the open ports are well known. One is a high, non-standard port that a default scan would have missed. Which port number is it?",
+      "answer": "{{PORT}}",
+      "hints": [ "Look at your full scan from t2. Well-known ports are below 1024; 3306 is MySQL." ],
+      "solution": { "answer_cmd": { "node": "scanner", "cmd": "nmap -n -p- -T4 10.15.1.{{HOST}} | awk -F/ '/\\/tcp *open/ && $1 > 10000 {print $1}'" } }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "What version?",
+      "text": "Services often announce themselves in a **banner** when you connect. Which version number does the FTP server on port 21 advertise?",
+      "answer": ["1.3.5", "proftpd 1.3.5"],
+      "hints": [
+        "`nmap -sV -p 21 <ip>` asks nmap to identify versions.",
+        "Or read the banner yourself: `nc <ip> 21` (Ctrl+C to quit)."
+      ],
+      "solution": { "answer_cmd": { "node": "scanner", "cmd": "exec 3<>/dev/tcp/10.15.1.{{HOST}}/21; timeout 3 head -1 <&3 | grep -o '[0-9]\\.[0-9]\\.[0-9]'" } }
+    },
+    {
+      "id": "t5",
+      "type": "answer",
+      "title": "Talk to the unknown service",
+      "text": "Connect to the non-standard port with `nc` and see what it does. Get the flag out of it.",
+      "answer": "{{FLAG}}",
+      "hints": [
+        "`nc <ip> <port>` opens a raw connection. Type into it and press Enter.",
+        "The service tells you to send `HELP`."
+      ],
+      "solution": { "answer_cmd": { "node": "scanner", "cmd": "exec 3<>/dev/tcp/10.15.1.{{HOST}}/{{PORT}}; printf 'FLAG\\n' >&3; timeout 3 head -2 <&3 | grep -o 'DOJO{[^}]*}'" } }
+    }
+  ]
+}

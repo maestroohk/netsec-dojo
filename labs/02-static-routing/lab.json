@@ -1,0 +1,64 @@
+{
+  "title": "Routers and static routes",
+  "module": "1 · Networking foundations",
+  "minutes": 30,
+  "summary": "Join two networks through a router. Learn why traffic needs a route there and a route back.",
+  "nodes": {
+    "client": "workstation on the LAN, 10.12.1.10",
+    "router": "connects LAN 10.12.1.0/24 and DMZ 10.12.2.0/24",
+    "server": "web server in the DMZ, 10.12.2.10"
+  },
+  "default_node": "client",
+  "ready": [ { "node": "server", "cmd": "curl -s -m2 -o /dev/null http://127.0.0.1/" } ],
+  "vars": { "FLAG": { "type": "flag" } },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "state",
+      "title": "Reach the far side of the router",
+      "text": "From **client**, `ping 10.12.2.254` (the router's DMZ address) says `Network is unreachable`. Give the client a route so this ping works.",
+      "checks": [
+        { "node": "client", "cmd": "ping -c1 -W2 10.12.2.254", "fail_msg": "client cannot reach 10.12.2.254 yet." }
+      ],
+      "hints": [
+        "Look at `ip route` on the client. It only knows its own network, `10.12.1.0/24`.",
+        "The router's address on the client's network is `10.12.1.254`. That is the next hop.",
+        "`ip route add default via 10.12.1.254` (or a specific route: `ip route add 10.12.2.0/24 via 10.12.1.254`)."
+      ],
+      "solution": { "steps": [ { "node": "client", "cmd": "ip route add default via 10.12.1.254" } ] }
+    },
+    {
+      "id": "t2",
+      "type": "state",
+      "title": "Fix the way back",
+      "text": "The client can now reach the router's far side, but `ping 10.12.2.10` (the server) gets no reply. The request arrives; the reply has nowhere to go. Fix it on the **server**.",
+      "checks": [
+        { "node": "client", "cmd": "ping -c1 -W2 10.12.2.10", "fail_msg": "client still gets no reply from 10.12.2.10." }
+      ],
+      "hints": [
+        "Open a shell on the router and run `tcpdump -ni any icmp` while pinging from the client. You will see requests going out and nothing coming back.",
+        "The server needs a route to `10.12.1.0/24`. Its router address is `10.12.2.254`.",
+        "On server: `ip route add default via 10.12.2.254`."
+      ],
+      "solution": { "steps": [ { "node": "server", "cmd": "ip route add default via 10.12.2.254" } ] }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "Trace the path",
+      "text": "Run `traceroute -n 10.12.2.10` from the client. What is the IP address of the **first hop**?",
+      "answer": "10.12.1.254",
+      "hints": [ "The first numbered line of traceroute output is hop 1: the first router on the path." ],
+      "solution": { "answer_cmd": { "node": "client", "cmd": "traceroute -n -q1 -w2 10.12.2.10 | awk 'NR==2{print $2}'" } }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "Use the network",
+      "text": "The server runs a web site on port 80. Fetch it from the client with `curl` and submit the flag it shows.",
+      "answer": "{{FLAG}}",
+      "hints": [ "`curl http://10.12.2.10/`" ],
+      "solution": { "answer_cmd": { "node": "client", "cmd": "curl -s http://10.12.2.10/ | grep -o 'DOJO{[^}]*}'" } }
+    }
+  ]
+}

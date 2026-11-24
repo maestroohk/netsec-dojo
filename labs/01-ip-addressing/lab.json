@@ -1,0 +1,87 @@
+{
+  "title": "IP addresses, subnets and ping",
+  "module": "1 · Networking foundations",
+  "minutes": 25,
+  "summary": "Two PCs on one wire cannot talk. Read their addresses, work out why, and fix it.",
+  "nodes": {
+    "pc1": "a correctly configured PC",
+    "pc2": "a PC someone misconfigured"
+  },
+  "default_node": "pc1",
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Read an address",
+      "text": "Open a shell on **pc1** and look at its network interface `eth0`. What is its IPv4 address, written with its prefix (like `192.168.0.5/24`)?",
+      "answer": "10.11.1.10/24",
+      "hints": [
+        "`ip -br addr` prints one line per interface.",
+        "Ignore `lo`, the loopback interface. You want the `eth0` line."
+      ],
+      "solution": {
+        "note": "The address is `10.11.1.10` and the prefix `/24` says the first 24 bits (`10.11.1`) name the network.",
+        "answer_cmd": { "node": "pc1", "cmd": "ip -br addr show dev eth0 | awk '{print $3}'" }
+      }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "Subnet arithmetic",
+      "text": "A `/26` network leaves 6 bits for hosts. How many **usable** host addresses does it have?",
+      "answer": "62",
+      "hints": [
+        "6 host bits give 2^6 = 64 addresses in total.",
+        "Two of them are reserved: the network address (all host bits 0) and the broadcast address (all host bits 1)."
+      ],
+      "solution": { "note": "2^6 = 64 addresses, minus the network and broadcast addresses, leaves **62**.", "answer": "62" }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "Find the fault",
+      "text": "From pc1, `ping -c 2 10.11.1.20` (pc2's intended address) fails. Open a shell on **pc2** and read its address. Which network address does pc2 currently think it lives in? (Answer like `192.168.0.0`.)",
+      "answer": ["10.11.9.0", "10.11.9.0/24"],
+      "hints": [
+        "Run `ip -br addr` on pc2.",
+        "The network address is the address with all host bits set to zero. For a `/24`, that means the last number becomes 0."
+      ],
+      "solution": {
+        "note": "pc2 has `10.11.9.20/24`, so it believes its network is `10.11.9.0/24`. pc1 is in `10.11.1.0/24`. Different networks, and no router between them, so neither will even try to deliver directly.",
+        "answer": "10.11.9.0"
+      }
+    },
+    {
+      "id": "t4",
+      "type": "state",
+      "title": "Fix pc2",
+      "text": "Give **pc2** the address `10.11.1.20/24` (and remove the wrong one) so that pc1 can ping it.",
+      "checks": [
+        { "node": "pc1", "cmd": "ping -c1 -W2 10.11.1.20", "fail_msg": "pc1 still cannot ping 10.11.1.20." }
+      ],
+      "hints": [
+        "Addresses are managed with `ip addr add <address>/<prefix> dev <interface>` and `ip addr del ...`.",
+        "On pc2: `ip addr del 10.11.9.20/24 dev eth0`, then `ip addr add 10.11.1.20/24 dev eth0`."
+      ],
+      "solution": {
+        "steps": [
+          { "node": "pc2", "cmd": "ip addr flush dev eth0 && ip addr add 10.11.1.20/24 dev eth0" }
+        ]
+      }
+    },
+    {
+      "id": "t5",
+      "type": "answer",
+      "title": "Meet ARP",
+      "text": "IP packets on a local network are delivered to hardware (MAC) addresses. After a successful ping, pc1 has learned pc2's MAC address. What is it?",
+      "answer_cmd": { "node": "pc2", "cmd": "cat /sys/class/net/eth0/address" },
+      "hints": [
+        "pc1 keeps what it learned in its neighbour (ARP) table.",
+        "On pc1: `ip neigh`. Look for the line starting with `10.11.1.20`; the MAC follows `lladdr`."
+      ],
+      "solution": {
+        "answer_cmd": { "node": "pc1", "cmd": "ping -c1 -W2 10.11.1.20 >/dev/null; ip neigh show 10.11.1.20 | awk '{print $5}'" }
+      }
+    }
+  ]
+}

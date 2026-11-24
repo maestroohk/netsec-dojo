@@ -1,0 +1,20 @@
+x-node: &node
+  image: dojo-toolbox:latest
+  init: true
+  cap_add: [NET_ADMIN]
+  volumes: ["./files:/lab:ro"]
+
+services:
+  webserver:
+    <<: *node
+    hostname: webserver
+    environment:
+      DOJO_SCANNER: "${DOJO_SCANNER}"
+      DOJO_GUESSER: "${DOJO_GUESSER}"
+      DOJO_USER: "${DOJO_USER}"
+      DOJO_SEED: "${DOJO_SEED}"
+    networks: { lan: { ipv4_address: 10.17.1.80 } }
+
+networks:
+  lan:
+    ipam: { config: [ { subnet: 10.17.1.0/24, gateway: 10.17.1.1 } ] }

@@ -1,0 +1,88 @@
+{
+  "title": "Packet capture: reading the wire",
+  "module": "1 · Networking foundations",
+  "minutes": 35,
+  "summary": "Capture traffic on a router with tcpdump and read a conversation layer by layer: ports, the TCP handshake, and HTTP.",
+  "nodes": {
+    "router": "you work here: all traffic between the two networks passes through it",
+    "workstation": "runs a sync tool that polls the server, 10.13.1.10",
+    "intranet": "the report server, 10.13.2.10"
+  },
+  "default_node": "router",
+  "ready": [ { "node": "intranet", "cmd": "curl -s -m2 -o /dev/null http://127.0.0.1:{{PORT}}/" } ],
+  "vars": {
+    "FLAG": { "type": "flag" },
+    "PORT": { "type": "int", "min": 8100, "max": 8999 },
+    "AGENT": { "type": "choice", "options": ["ReportSync/2.1", "StatusPoller/4.0", "AcmeAgent/1.7", "SyncBot/3.3"] }
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Find the conversation",
+      "text": "The **workstation** talks to the server `10.13.2.10` every few seconds. Capture on the **router** and find the TCP **port** on the server it connects to.",
+      "answer": "{{PORT}}",
+      "hints": [
+        "`tcpdump -ni any host 10.13.2.10` shows every packet to or from the server. Wait a few seconds.",
+        "Lines look like `10.13.1.10.51234 > 10.13.2.10.NNNN`. The number after the last dot of the destination is the server port."
+      ],
+      "solution": {
+        "answer_cmd": { "node": "router", "cmd": "timeout 12 tcpdump -lni any -c 4 'tcp and dst host 10.13.2.10' 2>/dev/null | grep -o '> 10\\.13\\.2\\.10\\.[0-9]*' | head -1 | awk -F. '{print $NF}'" }
+      }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "The three-way handshake",
+      "text": "Every TCP connection opens with three packets. tcpdump shows their flags in square brackets. What flags does the **second** packet (the server's reply) carry? Answer as tcpdump writes them, for example `[P.]`.",
+      "answer": ["[S.]", "S.", "syn-ack", "synack", "syn ack"],
+      "hints": [
+        "Capture only connection openings: `tcpdump -ni any 'tcp[tcpflags] & tcp-syn != 0'`.",
+        "`S` is SYN and `.` is ACK. The client sends SYN, the server answers with SYN plus ACK."
+      ],
+      "solution": { "note": "Client sends `[S]` (SYN), server answers `[S.]` (SYN-ACK), client finishes with `[.]` (ACK).", "answer": "[S.]" }
+    },
+    {
+      "id": "t3",
+      "type": "answer",
+      "title": "Read the request",
+      "text": "Plain HTTP is readable on the wire. Print packet contents as text and find the **User-Agent** the sync tool sends.",
+      "answer": "{{AGENT}}",
+      "hints": [
+        "`-A` prints each packet's payload as ASCII. Try `tcpdump -ni any -A port <the port from t1>`.",
+        "Look for a line starting with `User-Agent:` in the GET request."
+      ],
+      "solution": {
+        "answer_cmd": { "node": "router", "cmd": "timeout 12 tcpdump -lni any -A -c 20 'tcp and dst host 10.13.2.10 and dst port {{PORT}}' 2>/dev/null | grep -a -m1 '^User-Agent:' | sed 's/^User-Agent: //; s/\\r$//'" }
+      }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "Read the response",
+      "text": "The server's reply is just as readable. Capture it and submit the **reference** value it contains.",
+      "answer": "{{FLAG}}",
+      "hints": [
+        "Capture traffic coming **from** the server: `tcpdump -ni any -A src host 10.13.2.10`.",
+        "The body has a line `reference: DOJO{...}`."
+      ],
+      "solution": {
+        "answer_cmd": { "node": "router", "cmd": "timeout 12 tcpdump -lni any -A -c 30 'tcp and src host 10.13.2.10' 2>/dev/null | grep -a -o -m1 'DOJO{[^}]*}'" }
+      }
+    },
+    {
+      "id": "t5",
+      "type": "state",
+      "title": "Save a capture",
+      "text": "Analysts save captures to study later or open in Wireshark. On the **router**, write at least 10 packets of this traffic to `/root/sync.pcap`.",
+      "checks": [
+        { "node": "router", "cmd": "test \"$(tcpdump -nr /root/sync.pcap 2>/dev/null | wc -l)\" -ge 10", "fail_msg": "/root/sync.pcap is missing or has fewer than 10 packets." }
+      ],
+      "hints": [
+        "`-w file` writes raw packets instead of printing them. `-c N` stops after N packets.",
+        "`tcpdump -ni any -c 20 -w /root/sync.pcap port <port>`, then read it back with `tcpdump -nr /root/sync.pcap`."
+      ],
+      "solution": { "steps": [ { "node": "router", "cmd": "timeout 30 tcpdump -ni any -c 20 -w /root/sync.pcap 'tcp and host 10.13.2.10' 2>/dev/null; true" } ] }
+    }
+  ]
+}

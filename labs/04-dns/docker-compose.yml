@@ -1,0 +1,20 @@
+x-node: &node
+  image: dojo-toolbox:latest
+  init: true
+  cap_add: [NET_ADMIN]
+  volumes: ["./files:/lab:ro"]
+
+services:
+  pc:
+    <<: *node
+    hostname: pc
+    networks: { office: { ipv4_address: 10.14.1.10 } }
+  ns:
+    <<: *node
+    hostname: ns
+    environment: { DOJO_FLAG: "${DOJO_FLAG}" }
+    networks: { office: { ipv4_address: 10.14.1.53 } }
+
+networks:
+  office:
+    ipam: { config: [ { subnet: 10.14.1.0/24, gateway: 10.14.1.1 } ] }

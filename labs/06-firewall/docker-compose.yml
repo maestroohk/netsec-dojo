@@ -1,0 +1,32 @@
+x-node: &node
+  image: dojo-toolbox:latest
+  init: true
+  cap_add: [NET_ADMIN]
+  volumes: ["./files:/lab:ro"]
+
+services:
+  admin:
+    <<: *node
+    hostname: admin
+    networks: { lan: { ipv4_address: 10.16.1.10 } }
+  guest:
+    <<: *node
+    hostname: guest
+    networks: { lan: { ipv4_address: 10.16.1.66 } }
+  router:
+    <<: *node
+    hostname: router
+    sysctls: { net.ipv4.ip_forward: 1 }
+    networks:
+      lan: { ipv4_address: 10.16.1.254 }
+      dmz: { ipv4_address: 10.16.2.254 }
+  server:
+    <<: *node
+    hostname: server
+    networks: { dmz: { ipv4_address: 10.16.2.10 } }
+
+networks:
+  lan:
+    ipam: { config: [ { subnet: 10.16.1.0/24, gateway: 10.16.1.1 } ] }
+  dmz:
+    ipam: { config: [ { subnet: 10.16.2.0/24, gateway: 10.16.2.1 } ] }
