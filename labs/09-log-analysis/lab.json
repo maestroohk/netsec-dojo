@@ -72,7 +72,7 @@
       "checks": [
         { "node": "webserver", "cmd": "iptables -C INPUT -s {{GUESSER}} -j DROP 2>/dev/null || iptables -C INPUT -s {{GUESSER}}/32 -j DROP", "fail_msg": "No INPUT rule dropping that address yet." }
       ],
-      "hints": [ "Lab 6 used the FORWARD chain. Traffic to this machine itself goes through `INPUT`: `iptables -A INPUT -s <ip> -j DROP`." ],
+      "hints": [ "Lab 7 used the FORWARD chain. Traffic to this machine itself goes through `INPUT`: `iptables -A INPUT -s <ip> -j DROP`." ],
       "solution": {
         "note": "Blocking the address is only the first step. In a real incident you would also disable or reset the account, kill its sessions, check what it did (`last`, shell history, new files), and find out why a guessable password was allowed over SSH at all.",
         "steps": [ { "node": "webserver", "cmd": "iptables -A INPUT -s {{GUESSER}} -j DROP" } ]

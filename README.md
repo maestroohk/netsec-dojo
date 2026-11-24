@@ -45,9 +45,12 @@ Stop labs when you finish. Each lab uses only a few small containers, but there 
 | 2 | Routers and static routes | routing tables, gateways, the route back, traceroute |
 | 3 | Packet capture | tcpdump, ports, TCP handshake, why plain HTTP is readable |
 | 4 | DNS | dig, record types, resolvers |
-| 5 | Port scanning with nmap | host discovery, open/closed/filtered, banners |
-| 6 | Firewalls with iptables | default deny, stateful rules, segmentation |
-| 7 | Log analysis | grep/awk/sort pipelines, spotting scans and break-ins, containment |
+| 5 | NAT and port forwarding | private ranges, masquerading, DNAT, accidental exposure |
+| 6 | Port scanning with nmap | host discovery, open/closed/filtered, banners |
+| 7 | Firewalls with iptables | default deny, stateful rules, segmentation |
+| 8 | TLS and certificates | openssl, chains of trust, private CAs, name mismatch |
+| 9 | Log analysis | grep/awk/sort pipelines, spotting scans and break-ins, containment |
+| 10 | Hardening an SSH server | host key fingerprints, key login, disabling passwords and root |
 
 Answers such as flags, ports and addresses are randomised each time a lab starts, so you cannot copy them from a previous run.
 
@@ -64,7 +67,7 @@ These labs cover the foundations. For offensive web and exploitation practice, u
 A lab is a folder in `labs/`:
 
 ```
-labs/08-my-lab/
+labs/11-my-lab/
   lab.json             title, hosts, tasks, hints, solutions, random variables
   lesson.md            the lesson text (simple Markdown)
   docker-compose.yml   the network; every host uses image dojo-toolbox:latest
@@ -82,9 +85,11 @@ Task types in `lab.json`:
 Every task should have a `solution` (`steps` to run, and/or an `answer_cmd`). Then:
 
 ```
-dojo selftest 8
+dojo selftest 11
 ```
 
 starts the lab, checks that no hands-on task passes before you do anything, runs each solution, and checks that every task then passes.
+
+Give every network `driver_opts: { com.docker.network.bridge.enable_ip_masquerade: "false" }` (copy any existing lab). Otherwise Docker silently NATs traffic that crosses between lab networks, which breaks routing and NAT exercises and confuses packet captures.
 
 Hosts lose their default route at boot (see `images/toolbox/node-init`), so labs cannot reach the internet unless you set `NODE_KEEP_DEFAULT_ROUTE=1`.

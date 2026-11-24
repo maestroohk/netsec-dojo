@@ -48,6 +48,6 @@ ip neigh                         # the ARP / neighbour table
 
 ## Why a security person cares
 
-Almost every attack and every defence starts with "which hosts can reach which?" Reading addresses and prefixes fluently is how you answer that. ARP also has no authentication at all, which is what makes ARP spoofing (a later lab) possible.
+Almost every attack and every defence starts with "which hosts can reach which?" Reading addresses and prefixes fluently is how you answer that. ARP also has no authentication at all, which is what makes ARP spoofing possible.
 
 Start the lab, open a shell on `pc1`, and work through the tasks.

@@ -29,7 +29,7 @@ client  <-- [S.] SYN-ACK --  server    "OK, and I'd like to talk too"
 client  -- [.]  ACK     -->  server    "Great"
 ```
 
-tcpdump flag letters: `S` SYN, `.` ACK, `P` push (data), `F` FIN (close), `R` RST (reset/refused). A port scanner (lab 5) works by reading exactly these replies.
+tcpdump flag letters: `S` SYN, `.` ACK, `P` push (data), `F` FIN (close), `R` RST (reset/refused). A port scanner (lab 6) works by reading exactly these replies.
 
 ## Using tcpdump
 

@@ -1,0 +1,77 @@
+{
+  "title": "TLS and certificates",
+  "module": "2 · Security fundamentals",
+  "minutes": 40,
+  "summary": "Inspect an HTTPS server's certificate, learn why a browser trusts it or refuses, and make a PC trust a private certificate authority.",
+  "nodes": {
+    "pc": "an office PC, 10.19.1.20",
+    "shop": "an internal HTTPS site, shop.dojo.lab (10.19.1.10)"
+  },
+  "default_node": "pc",
+  "ready": [ { "node": "shop", "cmd": "curl -sk -m2 -o /dev/null https://127.0.0.1/ && curl -s -m2 -o /dev/null http://127.0.0.1/ca.crt" } ],
+  "vars": {
+    "FLAG": { "type": "flag" },
+    "CA": { "type": "choice", "options": ["Acme Internal Root CA", "Dojo Lab Root CA", "Northwind Private CA", "Contoso Root CA 2026"] }
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Who vouches for this site?",
+      "text": "From **pc**, `curl https://shop.dojo.lab/` refuses to connect. Look at the certificate the server presents. What is the common name (CN) of its **issuer**?",
+      "answer": "{{CA}}",
+      "hints": [
+        "`openssl s_client -connect shop.dojo.lab:443 -servername shop.dojo.lab` performs a TLS handshake and prints the certificate chain. Press Ctrl+C to leave.",
+        "Pipe the certificate into `openssl x509` to read it: `openssl s_client -connect shop.dojo.lab:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -subject`."
+      ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "openssl s_client -connect shop.dojo.lab:443 -servername shop.dojo.lab </dev/null 2>/dev/null | openssl x509 -noout -issuer -nameopt RFC2253 | sed 's/^issuer=CN=//'" } }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "Which protocol version?",
+      "text": "Which TLS version did your handshake negotiate?",
+      "answer": ["TLSv1.3", "TLS 1.3", "TLS1.3", "1.3"],
+      "hints": [ "`openssl s_client` prints a line like `New, TLSv1.x, Cipher is ...`. `curl -kv https://shop.dojo.lab/` shows it too (`-k` skips verification, for inspection only)." ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "openssl s_client -connect shop.dojo.lab:443 -servername shop.dojo.lab </dev/null 2>/dev/null | grep -o 'TLSv1\\.[0-9]' | head -1" } }
+    },
+    {
+      "id": "t3",
+      "type": "state",
+      "title": "Trust the company CA",
+      "text": "The issuer is a private CA that your PC does not know, so verification fails. The IT team publishes the CA certificate at `http://10.19.1.10/ca.crt`. Install it into **pc**'s trust store so that plain `curl https://shop.dojo.lab/` (no `-k`) succeeds.",
+      "checks": [
+        { "node": "pc", "cmd": "curl -s -m4 -o /dev/null https://shop.dojo.lab/", "fail_msg": "curl https://shop.dojo.lab/ still fails certificate verification." }
+      ],
+      "hints": [
+        "On Debian, extra trusted CAs go in `/usr/local/share/ca-certificates/` as `.crt` files. Then run `update-ca-certificates`.",
+        "`curl -o /usr/local/share/ca-certificates/company-ca.crt http://10.19.1.10/ca.crt && update-ca-certificates`"
+      ],
+      "solution": { "steps": [ { "node": "pc", "cmd": "curl -s -o /usr/local/share/ca-certificates/company-ca.crt http://10.19.1.10/ca.crt && update-ca-certificates >/dev/null" } ] }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "Check out securely",
+      "text": "Load the shop over verified HTTPS and submit the order code on the page.",
+      "answer": "{{FLAG}}",
+      "hints": [ "`curl https://shop.dojo.lab/`" ],
+      "solution": { "answer_cmd": { "node": "pc", "cmd": "curl -s -m4 https://shop.dojo.lab/ | grep -o 'DOJO{[^}]*}'" } }
+    },
+    {
+      "id": "t5",
+      "type": "answer",
+      "title": "Right certificate, wrong name",
+      "text": "`legacy.dojo.lab` points at the same server, yet `curl https://legacy.dojo.lab/` still fails even though you now trust the CA. Read the certificate's **Subject Alternative Name** extension: which DNS name is it valid for?",
+      "answer": ["shop.dojo.lab", "DNS:shop.dojo.lab"],
+      "hints": [
+        "Read curl's error carefully first: `curl -v https://legacy.dojo.lab/`.",
+        "`openssl s_client -connect shop.dojo.lab:443 </dev/null 2>/dev/null | openssl x509 -noout -ext subjectAltName`"
+      ],
+      "solution": {
+        "note": "The certificate only covers `shop.dojo.lab`. Trusting the issuer is not enough: the name you connected to must also appear in the certificate, otherwise any site with any valid certificate could impersonate any other.",
+        "answer_cmd": { "node": "pc", "cmd": "openssl s_client -connect shop.dojo.lab:443 -servername shop.dojo.lab </dev/null 2>/dev/null | openssl x509 -noout -ext subjectAltName | grep -o 'DNS:[^, ]*' | cut -d: -f2" }
+      }
+    }
+  ]
+}

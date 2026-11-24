@@ -55,4 +55,4 @@ tcpdump -ni any icmp
 
 ## Why a security person cares
 
-Routing decides what can talk to what. Network segmentation (keeping the database where the guest Wi-Fi cannot reach it) is routing plus firewalling (lab 6). When you later compromise one machine in a lab and use it to reach networks you could not reach before, that is called **pivoting**, and it is this lesson in reverse.
+Routing decides what can talk to what. Network segmentation (keeping the database where the guest Wi-Fi cannot reach it) is routing plus firewalling (lab 7). When an attacker takes over one machine and uses it to reach networks they could not reach before, that is called **pivoting**, and it is this lesson seen from the other side.

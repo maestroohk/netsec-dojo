@@ -1,0 +1,77 @@
+{
+  "title": "Hardening an SSH server",
+  "module": "3 · Defence and detection",
+  "minutes": 40,
+  "summary": "Verify a server's identity, switch to key-based login, then turn off password and root logins.",
+  "nodes": {
+    "workstation": "your admin workstation, 10.20.1.20",
+    "server": "a new Linux server, 10.20.1.10, user dev"
+  },
+  "default_node": "workstation",
+  "ready": [ { "node": "server", "cmd": "bash -c 'exec 3<>/dev/tcp/127.0.0.1/22'" } ],
+  "vars": {
+    "PASS": { "type": "choice", "options": ["tangerine-47-orbit", "copper-91-meadow", "violet-13-harbor", "granite-58-falcon"] }
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "answer",
+      "title": "Is this really the server?",
+      "text": "The first time you SSH somewhere, the client shows the server's host key fingerprint and asks if you trust it. Check it out of band: on **server** itself, find the SHA256 fingerprint of its **ED25519** host key. Submit it (it starts with `SHA256:`).",
+      "answer_cmd": { "node": "server", "cmd": "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}'" },
+      "hints": [
+        "Host keys live in `/etc/ssh/` as `ssh_host_*_key.pub`.",
+        "`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` prints the fingerprint."
+      ],
+      "solution": {
+        "note": "Now compare it with what `ssh dev@10.20.1.10` shows on the workstation before typing yes. If they ever differ, someone may be intercepting the connection.",
+        "answer_cmd": { "node": "workstation", "cmd": "ssh-keyscan -t ed25519 10.20.1.10 2>/dev/null | ssh-keygen -lf - | awk '{print $2}'" }
+      }
+    },
+    {
+      "id": "t2",
+      "type": "state",
+      "title": "Log in with a key",
+      "text": "The account `dev` currently logs in with the password `{{PASS}}`. On **workstation**, create an SSH key pair and install the public key for `dev` on the server, so that key login works without any password prompt.",
+      "checks": [
+        { "node": "workstation", "cmd": "ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 dev@10.20.1.10 true", "fail_msg": "Key-based login as dev from workstation does not work yet." }
+      ],
+      "hints": [
+        "`ssh-keygen -t ed25519` creates `~/.ssh/id_ed25519` (private, never share) and `~/.ssh/id_ed25519.pub` (public). Press Enter to accept defaults.",
+        "`ssh-copy-id dev@10.20.1.10` appends your public key to the server's `/home/dev/.ssh/authorized_keys`, using the password once."
+      ],
+      "solution": { "steps": [ { "node": "workstation", "cmd": "ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/id_ed25519 && sshpass -p '{{PASS}}' ssh-copy-id -o StrictHostKeyChecking=no -i /root/.ssh/id_ed25519.pub dev@10.20.1.10 >/dev/null 2>&1" } ] }
+    },
+    {
+      "id": "t3",
+      "type": "state",
+      "title": "Turn off passwords",
+      "text": "Passwords can be guessed (remember lab 9); keys realistically cannot. On **server**, disable password authentication in the SSH daemon and reload it. Your key login must keep working.",
+      "checks": [
+        { "node": "workstation", "cmd": "sshpass -p '{{PASS}}' ssh -o PubkeyAuthentication=no -o StrictHostKeyChecking=no -o ConnectTimeout=4 dev@10.20.1.10 true", "expect": "fail", "fail_msg": "The server still accepts the password." },
+        { "node": "workstation", "cmd": "ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 dev@10.20.1.10 true", "fail_msg": "Key login stopped working." }
+      ],
+      "hints": [
+        "The daemon's settings are in `/etc/ssh/sshd_config`. Look for `PasswordAuthentication`.",
+        "Set it to `PasswordAuthentication no`, check the file with `sshd -t` (no output means OK), then reload: `kill -HUP $(cat /run/sshd.pid)`.",
+        "Keep your existing session open while you change SSH settings on a real server. If the new config locks you out, that session is your way back in."
+      ],
+      "solution": { "steps": [ { "node": "server", "cmd": "sed -i -E 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config && sshd -t && kill -HUP $(cat /run/sshd.pid) && sleep 1" } ] }
+    },
+    {
+      "id": "t4",
+      "type": "state",
+      "title": "No direct root login",
+      "text": "Admins should log in as themselves and use `sudo`, so every action is tied to a person. On **server**, forbid root logins over SSH entirely and reload the daemon.",
+      "checks": [
+        { "node": "server", "cmd": "sshd -T 2>/dev/null | grep -qx 'permitrootlogin no'", "fail_msg": "PermitRootLogin is not set to no." },
+        { "node": "workstation", "cmd": "ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 dev@10.20.1.10 true", "fail_msg": "Key login as dev stopped working." }
+      ],
+      "hints": [
+        "Same file, setting `PermitRootLogin`.",
+        "`sshd -T` prints the effective configuration: `sshd -T | grep -i permitroot`."
+      ],
+      "solution": { "steps": [ { "node": "server", "cmd": "sed -i -E 's/^PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config && sshd -t && kill -HUP $(cat /run/sshd.pid) && sleep 1" } ] }
+    }
+  ]
+}

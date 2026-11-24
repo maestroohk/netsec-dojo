@@ -1,0 +1,22 @@
+x-node: &node
+  image: dojo-toolbox:latest
+  init: true
+  cap_add: [NET_ADMIN]
+  volumes: ["./files:/lab:ro"]
+
+services:
+  pc:
+    <<: *node
+    hostname: pc
+    extra_hosts: ["shop.dojo.lab:10.19.1.10", "legacy.dojo.lab:10.19.1.10"]
+    networks: { office: { ipv4_address: 10.19.1.20 } }
+  shop:
+    <<: *node
+    hostname: shop
+    environment: { DOJO_FLAG: "${DOJO_FLAG}", DOJO_CA: "${DOJO_CA}" }
+    networks: { office: { ipv4_address: 10.19.1.10 } }
+
+networks:
+  office:
+    driver_opts: { com.docker.network.bridge.enable_ip_masquerade: "false" }
+    ipam: { config: [ { subnet: 10.19.1.0/24, gateway: 10.19.1.1 } ] }

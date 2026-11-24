@@ -52,4 +52,4 @@ nc 10.15.1.20 21                   # open a raw TCP connection; Ctrl+C to quit
 - **Attack surface**: every open port is a program that strangers can talk to. A defender's first job is knowing that list and closing what is not needed.
 - **Hidden services**: admins move services to odd ports thinking it hides them. A full `-p-` scan finds them in seconds.
 - **Versions**: a banner like `ProFTPD 1.3.5` can be looked up in vulnerability databases (that version has a well-known critical flaw). Hiding banners does not fix bugs, but leaving them makes an attacker's job easy.
-- **Detection**: scans are noisy. Lab 7 looks at what they leave in logs.
+- **Detection**: scans are noisy. Lab 9 looks at what they leave in logs.

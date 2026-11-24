@@ -25,6 +25,8 @@ services:
 
 networks:
   lan:
+    driver_opts: { com.docker.network.bridge.enable_ip_masquerade: "false" }
     ipam: { config: [ { subnet: 10.13.1.0/24, gateway: 10.13.1.1 } ] }
   dmz:
+    driver_opts: { com.docker.network.bridge.enable_ip_masquerade: "false" }
     ipam: { config: [ { subnet: 10.13.2.0/24, gateway: 10.13.2.1 } ] }

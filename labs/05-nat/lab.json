@@ -1,0 +1,73 @@
+{
+  "title": "NAT and port forwarding",
+  "module": "1 · Networking foundations",
+  "minutes": 40,
+  "summary": "Build what every home router does: share one public address with a private network, then expose one inside service to the internet.",
+  "nodes": {
+    "router": "your home router: 10.18.1.254 inside, 203.0.113.1 on the internet",
+    "laptop": "a laptop at home, 10.18.1.10",
+    "nas": "a home file server with a web page on port 8080, 10.18.1.20",
+    "website": "a public website on the internet, 203.0.113.80"
+  },
+  "default_node": "router",
+  "ready": [
+    { "node": "website", "cmd": "curl -s -m2 -o /dev/null http://127.0.0.1/" },
+    { "node": "nas", "cmd": "curl -s -m2 -o /dev/null http://127.0.0.1:8080/" }
+  ],
+  "vars": { "FLAG": { "type": "flag" } },
+  "tasks": [
+    {
+      "id": "t1",
+      "type": "state",
+      "title": "Get the laptop online",
+      "text": "From **laptop**, `curl http://203.0.113.80/` hangs. The request reaches the website, but the website has no route back to a private `10.18.1.x` address. On the **router**, add source NAT (masquerading) so home traffic leaves with the router's public address.",
+      "checks": [
+        { "node": "laptop", "cmd": "curl -s -m4 http://203.0.113.80/ | grep -q 'Hello'", "fail_msg": "laptop still cannot load http://203.0.113.80/." }
+      ],
+      "hints": [
+        "Prove where it breaks first: run `tcpdump -ni any port 80` on the router while the laptop curls. Requests go out with source 10.18.1.10 and nothing comes back.",
+        "NAT rules live in the `nat` table, and source NAT happens in the `POSTROUTING` chain, after the routing decision.",
+        "`iptables -t nat -A POSTROUTING -s 10.18.1.0/24 ! -d 10.18.1.0/24 -j MASQUERADE`"
+      ],
+      "solution": { "steps": [ { "node": "router", "cmd": "iptables -t nat -A POSTROUTING -s 10.18.1.0/24 ! -d 10.18.1.0/24 -j MASQUERADE" } ] }
+    },
+    {
+      "id": "t2",
+      "type": "answer",
+      "title": "What the internet sees",
+      "text": "The website prints the address it saw the request come from. Which address does it report for the laptop now?",
+      "answer": "203.0.113.1",
+      "hints": [ "Just read the page: `curl http://203.0.113.80/` from the laptop." ],
+      "solution": {
+        "note": "The website sees the router's public address. It has no idea the laptop exists. The router remembers the translation in its connection-tracking table and rewrites the replies back to 10.18.1.10.",
+        "answer_cmd": { "node": "laptop", "cmd": "curl -s -m4 http://203.0.113.80/ | awk '/Your address/{print $3}'" }
+      }
+    },
+    {
+      "id": "t3",
+      "type": "state",
+      "title": "Forward a port to the NAS",
+      "text": "You want to reach the NAS web page from outside. Make `http://203.0.113.1:8080/` (the router's public address) reach the **nas** at `10.18.1.20:8080`. Test it from **website**, which stands in for anyone on the internet.",
+      "checks": [
+        { "node": "website", "cmd": "curl -s -m4 http://203.0.113.1:8080/ | grep -q 'Home NAS'", "fail_msg": "From the internet, http://203.0.113.1:8080/ does not reach the NAS yet." }
+      ],
+      "hints": [
+        "Destination NAT rewrites where a packet is going. It must happen before the routing decision, so it lives in the `PREROUTING` chain of the `nat` table.",
+        "`iptables -t nat -A PREROUTING -d 203.0.113.1 -p tcp --dport 8080 -j DNAT --to-destination 10.18.1.20:8080`"
+      ],
+      "solution": { "steps": [ { "node": "router", "cmd": "iptables -t nat -A PREROUTING -d 203.0.113.1 -p tcp --dport 8080 -j DNAT --to-destination 10.18.1.20:8080" } ] }
+    },
+    {
+      "id": "t4",
+      "type": "answer",
+      "title": "Exposed",
+      "text": "Load the forwarded page from **website** and submit the share code it shows. Anyone on the internet could now do the same.",
+      "answer": "{{FLAG}}",
+      "hints": [ "`curl http://203.0.113.1:8080/` on the website host." ],
+      "solution": {
+        "note": "This is why port forwarding deserves care. One rule put a private file server on the public internet, with no login in front of it.",
+        "answer_cmd": { "node": "website", "cmd": "curl -s -m4 http://203.0.113.1:8080/ | grep -o 'DOJO{[^}]*}'" }
+      }
+    }
+  ]
+}
